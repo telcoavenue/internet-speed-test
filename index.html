@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpeedCheck — Internet Speed Test</title>
+  <meta name="description" content="Simple, privacy‑clear internet speed test using Cloudflare's open source speed test engine." />
+  <style>
+    :root { color-scheme: light dark; }
+    /* THEME TOKENS */
+    .theme-dark {
+      --bg: #0b0f17;
+      --card: #121826;
+      --muted: #7c8aa5;
+      --text: #e6edf7;
+      --accent: #5b9cff;
+      --good: #3bd671;
+      --warn: #ffd166;
+      --bad: #ff5c7a;
+      --radius: 18px;
+      --border: #1d263a;
+      --card-border: #1b2540;
+      --progress-bg: #111827;
+      --btn-bg: #13203a;
+      --btn-border: #29406c;
+      --header-grad: radial-gradient(1200px 600px at 70% -10%, #14213a66, transparent 60%);
+      --panel-grad: linear-gradient(180deg, #0f1523, var(--card));
+    }
+    .theme-light {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --muted: #51607a;
+      --text: #0b1220;
+      --accent: #1f49c7;
+      --good: #128a4a;
+      --warn: #b98500;
+      --bad: #c41e3a;
+      --radius: 18px;
+      --border: #dfe5f2;
+      --card-border: #e6ecf7;
+      --progress-bg: #e9eef8;
+      --btn-bg: #eef3ff;
+      --btn-border: #cfe0ff;
+      --header-grad: radial-gradient(1200px 600px at 70% -10%, #dfe7ff66, transparent 60%);
+      --panel-grad: linear-gradient(180deg, #f8faff, var(--card));
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      background: var(--header-grad), var(--bg);
+      color: var(--text);
+      display: grid; place-items: center; padding: 28px;
+    }
+    .wrap { width: min(980px, 100%); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 18px; }
+    h1 { margin:0; font-weight:700; letter-spacing:.3px; font-size: clamp(20px, 2.4vw, 28px); }
+    .sub { color: var(--muted); font-size: 14px; }
+
+    .panel { background: var(--panel-grad); border:1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.08); }
+
+    .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+
+    .meter { grid-column: span 12; min-height: 200px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+
+    .card { background: var(--card); border:1px solid var(--card-border); border-radius: var(--radius); padding:16px; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; }
+    .label { color: var(--muted); font-size: 13px; letter-spacing:.3px; text-transform:uppercase; }
+    .value { font-weight:800; font-size: clamp(24px, 6vw, 48px); line-height:1; }
+    .unit { font-size:.5em; color: var(--muted); margin-left:.3em; font-weight:600; }
+
+    .controls { display:flex; gap:10px; flex-wrap:wrap; }
+    button.btn {
+      appearance:none; border:1px solid var(--btn-border); background: var(--btn-bg); color:var(--text);
+      padding: 10px 14px; border-radius: 12px; cursor:pointer; font-weight:700; letter-spacing:.2px;
+      transition: transform .07s ease, background .2s ease, border-color .2s ease, opacity .2s ease; display:flex; align-items:center; gap:8px;
+    }
+    button.btn.primary { background: linear-gradient(180deg, #2f69ff, #1f49c7); border-color:#3e63ff; color: #fff; }
+    button.btn.primary:disabled { opacity:.6; cursor:not-allowed; }
+    button.btn:hover { transform: translateY(-1px); }
+
+    .status { margin-top:12px; color: var(--muted); font-size: 14px; min-height: 20px; }
+
+    .progress { height: 8px; background: var(--progress-bg); border-radius: 999px; overflow:hidden; border:1px solid var(--card-border); }
+    .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #3e63ff, #5b9cff); transition: width .25s ease; }
+
+    .kpi { grid-column: span 3; }
+    @media (max-width: 860px) { .kpi { grid-column: span 6; } }
+    @media (max-width: 520px) { .kpi { grid-column: span 12; } }
+
+    details { margin-top: 14px; }
+    details pre { background:#0a0f1c11; border:1px solid var(--card-border); border-radius: 12px; padding:12px; overflow:auto; max-height:240px; }
+    footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align:center; }
+    a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>SpeedCheck</h1>
+        <div class="sub">Lightweight Internet speed test (download, upload, latency & jitter)</div>
+      </div>
+      <div class="controls">
+        <button id="startBtn" class="btn primary">▶ Start test</button>
+        <button id="stopBtn" class="btn" disabled>■ Stop</button>
+        <button id="restartBtn" class="btn" disabled>↻ Restart</button>
+        <button id="themeBtn" class="btn" title="Toggle dark/light">🌙 Theme</button>
+      </div>
+    </header>
+
+    <div class="panel">
+      <div class="grid">
+        <div class="meter card" style="grid-column: span 12;">
+          <div style="width:100%;">
+            <div class="progress"><div id="progressBar" class="bar"></div></div>
+            <div id="status" class="status">Idle — click <b>Start test</b>.</div>
+          </div>
+        </div>
+
+        <div class="kpi card">
+          <div class="label">Download</div>
+          <div class="value" id="dl">—<span class="unit">Mbps</span></div>
+        </div>
+        <div class="kpi card">
+          <div class="label">Upload</div>
+          <div class="value" id="ul">—<span class="unit">Mbps</span></div>
+        </div>
+        <div class="kpi card">
+          <div class="label">Latency (idle)</div>
+          <div class="value" id="lat">—<span class="unit">ms</span></div>
+        </div>
+        <div class="kpi card">
+          <div class="label">Jitter (idle)</div>
+          <div class="value" id="jit">—<span class="unit">ms</span></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Advanced details</summary>
+        <pre id="debug"></pre>
+      </details>
+    </div>
+
+    <footer>
+      Results are measured against Cloudflare's edge network. By running a test, some aggregated results may be collected by Cloudflare. Learn more in their speedtest docs.
+    </footer>
+  </div>
+
+  <!-- App: uses Cloudflare's open-source @cloudflare/speedtest library -->
+  <script type="module">
+    // Load the ESM build directly from UNPKG.
+    import SpeedTest from 'https://unpkg.com/@cloudflare/speedtest?module';
+
+    // --- helpers ---
+    const $ = (id) => document.getElementById(id);
+    const fmtMbps = (bps) => (bps > 0 ? (bps / 1e6).toFixed(2) : '—');
+    const fmtMs = (v) => (v > 0 ? v.toFixed(1) : '—');
+
+    // UI elements
+    const startBtn = $('startBtn');
+    const stopBtn = $('stopBtn');
+    const restartBtn = $('restartBtn');
+    const statusEl = $('status');
+    const progressBar = $('progressBar');
+    const dlEl = $('dl');
+    const ulEl = $('ul');
+    const latEl = $('lat');
+    const jitEl = $('jit');
+    const dbg = $('debug');
+    const themeBtn = $('themeBtn');
+
+    // Theme setup
+    const preferred = localStorage.getItem('speedcheck:theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const applyTheme = (t) => {
+      document.body.classList.toggle('theme-dark', t === 'dark');
+      document.body.classList.toggle('theme-light', t === 'light');
+      themeBtn.textContent = (t === 'dark') ? '🌙 Dark' : '☀️ Light';
+      localStorage.setItem('speedcheck:theme', t);
+    };
+    applyTheme(preferred);
+
+    // Instantiate test engine (do not autostart)
+    const st = new SpeedTest({ autoStart: false });
+
+    // Event: engine running state toggled
+    st.onRunningChange = (running) => {
+      startBtn.disabled = running;
+      stopBtn.disabled = !running;
+      restartBtn.disabled = running;
+      if (running) dbg.textContent = '';
+    };
+
+    // Event: any result changed (type will be 'latency' | 'download' | 'upload' | 'packetLoss')
+    st.onResultsChange = ({ type }) => {
+      const r = st.results; // live Results object
+      // Update primary KPIs
+      dlEl.firstChild.nodeValue = fmtMbps(r.getDownloadBandwidth?.());
+      ulEl.firstChild.nodeValue = fmtMbps(r.getUploadBandwidth?.());
+      latEl.firstChild.nodeValue = fmtMs(r.getUnloadedLatency?.());
+      jitEl.firstChild.nodeValue = fmtMs(r.getUnloadedJitter?.());
+
+      // Status + naive progress heuristic
+      const map = { latency: 10, download: 55, upload: 95, packetLoss: 100 };
+      const pct = map[type] ?? 0;
+      progressBar.style.width = pct + '%';
+      statusEl.innerHTML = `Measuring <b>${type}</b>…`;
+
+      // Debug details
+      try {
+        const summary = r.getSummary?.();
+        if (summary) dbg.textContent = JSON.stringify(summary, null, 2);
+      } catch (_) { /* ignore */ }
+    };
+
+    // Event: finished
+    st.onFinish = (results) => {
+      const s = results.getSummary();
+      statusEl.innerHTML = 'Done ✓';
+      progressBar.style.width = '100%';
+      // Ensure final values are formatted
+      dlEl.firstChild.nodeValue = fmtMbps(results.getDownloadBandwidth());
+      ulEl.firstChild.nodeValue = fmtMbps(results.getUploadBandwidth());
+      latEl.firstChild.nodeValue = fmtMs(results.getUnloadedLatency());
+      jitEl.firstChild.nodeValue = fmtMs(results.getUnloadedJitter());
+      dbg.textContent = JSON.stringify(s, null, 2);
+    };
+
+    st.onError = (err) => {
+      statusEl.innerHTML = `Error: ${String(err)}`;
+      progressBar.style.width = '0%';
+    };
+
+    // Controls
+    startBtn.addEventListener('click', () => {
+      statusEl.textContent = 'Starting…';
+      progressBar.style.width = '3%';
+      st.restart(); // clears any previous state and starts fresh
+    });
+    stopBtn.addEventListener('click', () => {
+      statusEl.textContent = 'Stopped';
+      progressBar.style.width = '0%';
+      st.pause();
+    });
+    restartBtn.addEventListener('click', () => {
+      statusEl.textContent = 'Restarting…';
+      progressBar.style.width = '3%';
+      st.restart();
+    });
+    themeBtn.addEventListener('click', () => {
+      const next = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+      applyTheme(next);
+    });
+  </script>
+</body>
+</html>
